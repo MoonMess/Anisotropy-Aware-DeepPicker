@@ -1,0 +1,10 @@
+checkpoints/
+__pycache__/
+*/__pycache__/
+*.pyc
+inference_results/
+/results
+*.ipynb
+wandb_logs/
+debug/
+visualization/
