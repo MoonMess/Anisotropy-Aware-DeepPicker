@@ -23,12 +23,12 @@ else:
 LABEL_DIR = CZI_DATA_ROOT + "mask/"
 RADIUS_FRACTION = 0.5 # Fraction of the particle radius to generate masks.
 
-# Percentiles pour la normalisation globale par défaut
+# Default percentiles for global normalization
 NORM_LOWER_PERCENTILE = 5.0
 NORM_UPPER_PERCENTILE = 99.0
 
 
-# --- Paramètres du Modèle ---
+# --- Model Parameters ---
 NUM_CLASSES = 6 # Number of particle types (excluding background)
 IN_CHANNELS = 1 # Grayscale tomograms
 
@@ -50,7 +50,7 @@ TOMO_TYPE = "denoised"
 TRAINING_TOMO_TYPES = ["denoised", "isonetcorrected"]#, "ctfdeconvolved", "wbp"]
 
 CLASS_LOSS_WEIGHTS = [
-    1.0,  # background (classe 0)
+    1.0,  # background (class 0)
     10.0,  # apo-ferritin
     10.0,  # beta-amylase
     20.0,  # beta-galactosidase
@@ -59,7 +59,7 @@ CLASS_LOSS_WEIGHTS = [
     10.0,  # virus-like-particle
 ]
 
-# --- Paramètres de l'Entraînement ---
+# --- Training Parameters ---
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu" # Training Parameters
 LEARNING_RATE = 1e-3 # Initial learning rate.
 # Enable/disable Test-Time Augmentation for validation.

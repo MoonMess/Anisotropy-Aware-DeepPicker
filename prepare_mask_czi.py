@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-Script pour générer les vérités terrains (ground truth) pour un entraînement
-de segmentation sémantique.
+Script to generate ground truth for semantic
+segmentation training.
 
-Ce script lit les tomogrammes au format .zarr et les coordonnées des particules
-au format .json depuis la structure de données CZI originale. Il produit deux
-types de cartes pour chaque tomogramme : une carte de segmentation où chaque
-voxel a une étiquette de classe.
+This script reads tomograms in .zarr format and particle coordinates
+in .json format from the original CZI data structure. It produces two
+types of maps for each tomogram: a segmentation map where each
+voxel has a class label.
 """
 
 import argparse
@@ -20,8 +20,8 @@ from tqdm import tqdm
 try:
     import zarr
 except ImportError:
-    print("Erreur : La bibliothèque 'zarr' n'est pas installée.")
-    print("Veuillez l'installer, par exemple via 'pip install zarr'")
+    print("Error: The 'zarr' library is not installed.")
+    print("Please install it, for example via 'pip install zarr'")
     exit(1)
 try:
     import matplotlib.pyplot as plt
@@ -31,57 +31,57 @@ except ImportError:
     PLOTTING_LIBS_AVAILABLE = False
 
 import os
-# Constante pour la conversion des coordonnées de picks (Angstroms) en indices de voxels.
+# Constant for converting pick coordinates (Angstroms) to voxel indices.
 from particle_config import CZI_PARTICLE_CONFIG
 from config import VOXEL_SPACING, CZI_DATA_ROOT
 
 def generate_ground_truth(tomo_shape, particles_data, particle_config, voxel_spacing, radius_fraction, single_pixel=False):
     """
-    Génère la carte de segmentation sémantique de manière efficace.
+    Generates the semantic segmentation map efficiently.
 
     Args:
-        tomo_shape (tuple): La forme du tomogramme (Z, Y, X).
-        particles_data (list): Liste de dictionnaires, chacun décrivant une particule (coordonnées en Angstroms).
-        particle_config (dict): Dictionnaire de configuration des particules (ID, rayon).
-        voxel_spacing (float): La taille d'un voxel en Angstroms.
-        radius_fraction (float): Fraction du rayon à utiliser (ignoré si single_pixel=True).
-        single_pixel (bool): Si True, génère un masque d'un seul pixel au centroïde.
+        tomo_shape (tuple): The shape of the tomogram (Z, Y, X).
+        particles_data (list): List of dictionaries, each describing a particle (coordinates in Angstroms).
+        particle_config (dict): Particle configuration dictionary (ID, radius).
+        voxel_spacing (float): The size of a voxel in Angstroms.
+        radius_fraction (float): Fraction of the radius to use (ignored if single_pixel=True).
+        single_pixel (bool): If True, generates a single-pixel mask at the centroid.
 
     Returns:
-        np.ndarray: La carte de segmentation (seg_map).
+        np.ndarray: The segmentation map (seg_map).
     """
     seg_map = np.zeros(tomo_shape, dtype=np.uint8)
 
-    for particle in tqdm(particles_data, leave=False, desc="  Particules"):
+    for particle in tqdm(particles_data, leave=False, desc="  Particles"):
         class_name = particle['class_name']
         config = particle_config.get(class_name)
         if not config:
             continue
 
-        # Propriétés de la particule
+        # Particle properties
         class_id = config['id']
 
-        # Conversion des coordonnées d'Angstroms en pixels
+        # Conversion of coordinates from Angstroms to pixels
         center_x_px = particle['x_angstrom'] / voxel_spacing
         center_y_px = particle['y_angstrom'] / voxel_spacing
         center_z_px = particle['z_angstrom'] / voxel_spacing
 
         if single_pixel:
-            # --- NOUVELLE LOGIQUE POUR LE MASQUE D'UN SEUL PIXEL ---
-            # Arrondir aux coordonnées entières les plus proches
+            # --- NEW LOGIC FOR SINGLE PIXEL MASK ---
+            # Round to the nearest integer coordinates
             iz = int(round(center_z_px))
             iy = int(round(center_y_px))
             ix = int(round(center_x_px))
 
-            # Vérifier que les coordonnées sont dans les limites du tomogramme
+            # Check that the coordinates are within the tomogram boundaries
             if 0 <= iz < tomo_shape[0] and 0 <= iy < tomo_shape[1] and 0 <= ix < tomo_shape[2]:
                 seg_map[iz, iy, ix] = class_id
         else:
-            # --- LOGIQUE ORIGINALE POUR LES SPHÈRES ---
+            # --- ORIGINAL LOGIC FOR SPHERES ---
             radius_px = (config['radius'] / voxel_spacing) * radius_fraction
             bbox_radius_px = radius_px
 
-            # Définition d'une boîte englobante pour optimiser les calculs
+            # Definition of a bounding box to optimize calculations
             z_min = int(max(0, np.floor(center_z_px - bbox_radius_px)))
             z_max = int(min(tomo_shape[0], np.ceil(center_z_px + bbox_radius_px) + 1))
             y_min = int(max(0, np.floor(center_y_px - bbox_radius_px)))
@@ -92,13 +92,13 @@ def generate_ground_truth(tomo_shape, particles_data, particle_config, voxel_spa
             if z_min >= z_max or y_min >= y_max or x_min >= x_max:
                 continue
 
-            # Grille de coordonnées pour la boîte englobante
+            # Coordinate grid for the bounding box
             bb_z, bb_y, bb_x = np.ogrid[z_min:z_max, y_min:y_max, x_min:x_max]
 
-            # Calcul de la distance au carré par rapport au centre dans la boîte
+            # Calculation of the squared distance from the center in the box
             dist_sq_in_bb = (bb_x - center_x_px)**2 + (bb_y - center_y_px)**2 + (bb_z - center_z_px)**2
 
-            # Mise à jour de la carte de segmentation
+            # Update of the segmentation map
             sphere_mask_in_bb = dist_sq_in_bb <= radius_px**2
             seg_map_slice = seg_map[z_min:z_max, y_min:y_max, x_min:x_max]
             seg_map_slice[sphere_mask_in_bb] = class_id
@@ -115,13 +115,13 @@ def _save_debug_plot(
     z_slice_idx: int
 ):
     """
-    Sauvegarde un graphique de débogage montrant les contours de segmentation
-    et les annotations de vérité terrain.
+    Saves a debug plot showing segmentation contours
+    and ground truth annotations.
     """
     fig, ax = plt.subplots(1, 1, figsize=(12, 12))
-    fig.suptitle(f"Visualisation pour {run_id} ({tomo_type}) - Coupe Z={z_slice_idx}", fontsize=16)
+    fig.suptitle(f"Visualization for {run_id} ({tomo_type}) - Slice Z={z_slice_idx}", fontsize=16)
 
-    # Normalisation du tomogramme pour l'affichage
+    # Normalization of the tomogram for display
     vmin, vmax = np.percentile(tomogram_slice, [1, 99])
 
 
@@ -129,7 +129,7 @@ def _save_debug_plot(
     id_to_color = {p_info['id']: colors[i % len(colors)] for i, p_info in enumerate(particle_config.values())}
     id_to_name = {p_info['id']: p_name for p_name, p_info in particle_config.items()}
 
-    # --- Axe 1: Masque de Segmentation ---
+    # --- Axis 1: Segmentation Mask ---
     ax.imshow(tomogram_slice, cmap='gray', vmin=vmin, vmax=vmax, origin='lower')
     ax.set_title("Tomogramme + Contours de Segmentation + Annotations GT")
 
@@ -156,7 +156,7 @@ def _save_debug_plot(
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     if by_label:
-        ax.legend(by_label.values(), by_label.keys(), title="Annotations GT (Cercle)")
+        ax.legend(by_label.values(), by_label.keys(), title="GT Annotations (Circle)")
     ax.set_xticks([])
     ax.set_yticks([])
 
@@ -167,7 +167,7 @@ def _save_debug_plot(
 
 
 def _parse_json_picks(file_path: str) -> list:
-    """Lit un fichier de 'picks' JSON et retourne une liste de coordonnées."""
+    """Reads a JSON 'picks' file and returns a list of coordinates."""
     coordinates = []
     if not Path(file_path).exists():
         return coordinates
@@ -179,47 +179,47 @@ def _parse_json_picks(file_path: str) -> list:
                 if location and 'x' in location and 'y' in location and 'z' in location:
                     coordinates.append(location)
     except Exception as e:
-        print(f"Avertissement: Impossible de traiter le fichier de picks {file_path}: {e}")
+        print(f"Warning: Could not process picks file {file_path}: {e}")
     return coordinates
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Génère les cartes de segmentation pour l'entraînement sur les données CZI."
+        description="Generates segmentation maps for training on CZI data."
     )
     parser.add_argument(
         "--data_root",
         type=str,
         default=CZI_DATA_ROOT,
-        help="Chemin vers le dossier racine du dataset CZI (contenant 'train', etc.)."
+        help="Path to the root directory of the CZI dataset (containing 'train', etc.)."
     )
     parser.add_argument(
         "--output_dir",
         type=str,
         required=False,
-        help="Chemin vers le dossier de sortie où les sous-dossiers 'segmentations' et 'centroids' seront créés."
+        help="Path to the output directory where 'segmentations' and 'centroids' subdirectories will be created."
     )
     parser.add_argument(
         "--tomo_type",
         type=str,
         default="denoised",
-        help="Type de tomogramme à traiter (ex: 'denoised', 'isonetcorrected')."
+        help="Type of tomogram to process (e.g., 'denoised', 'isonetcorrected')."
     )
     parser.add_argument(
         "--radius_fraction",
         type=float,
         default=0.5,
-        help="Fraction du rayon configuré à utiliser pour les masques sphériques. Défaut: 1.0"
+        help="Fraction of the configured radius to use for spherical masks. Default: 1.0"
     )
     parser.add_argument(
         "--save_plots",
         action="store_true",
-        help="Générer et sauvegarder une image de prévisualisation pour chaque masque."
+        help="Generate and save a preview image for each mask."
     )
 
     parser.add_argument(
         "--single_pixel_mask",
         action="store_true",
-        help="Générer un masque d'un seul pixel au centroïde au lieu d'une sphère."
+        help="Generate a single-pixel mask at the centroid instead of a sphere."
     )
     args = parser.parse_args()
 
@@ -228,10 +228,10 @@ def main():
     picks_base_dir = data_root_path / "train/overlay/ExperimentRuns"
     output_path = Path(args.output_dir) if args.output_dir else Path(os.path.join(data_root_path, "mask"))
 
-    # Création des dossiers de sortie
-    # Le nom du dossier reflète le mode utilisé
+    # Creation of output directories
+    # The directory name reflects the mode used
     if args.single_pixel_mask:
-        # Utiliser radius_fraction 0.0 pour la compatibilité avec le dataloader
+        # Use radius_fraction 0.0 for compatibility with the dataloader
         seg_output_path = output_path / "segmentations_0.0"
     else:
         seg_output_path = output_path / f"segmentations_{args.radius_fraction}"
@@ -239,30 +239,30 @@ def main():
 
     run_ids = sorted([d.name for d in tomo_runs_dir.iterdir() if d.is_dir() and d.name.startswith("TS_")])
     if not run_ids:
-        print(f"Erreur : Aucun dossier de run ('TS_*') trouvé dans {tomo_runs_dir}")
+        print(f"Error: No run folders ('TS_*') found in {tomo_runs_dir}")
         return
     
-    # Désactiver la visualisation si les bibliothèques ne sont pas disponibles
+    # Disable visualization if libraries are not available
     if args.save_plots and not PLOTTING_LIBS_AVAILABLE:
-        print("\nAvertissement: Bibliothèques de visualisation (matplotlib, scikit-image) non trouvées. Visualisation désactivée.")
+        print("\nWarning: Visualization libraries (matplotlib, scikit-image) not found. Visualization disabled.")
         args.save_plots = False
 
-    for run_id in tqdm(run_ids, desc="Traitement des Tomogrammes"):
+    for run_id in tqdm(run_ids, desc="Processing Tomograms"):
         tomo_path = tomo_runs_dir / run_id / "VoxelSpacing10.000" / f"{args.tomo_type}.zarr"
         if not tomo_path.exists():
-            tqdm.write(f"Avertissement: Tomogramme non trouvé pour {run_id} à {tomo_path}. Ignoré.")
+            tqdm.write(f"Warning: Tomogram not found for {run_id} at {tomo_path}. Skipped.")
             continue
 
         try:
             zarr_obj = zarr.open(tomo_path, mode='r')
             tomo_shape = zarr_obj['0'].shape if isinstance(zarr_obj, zarr.hierarchy.Group) else zarr_obj.shape
         except Exception as e:
-            tqdm.write(f"Erreur lors de la lecture de {tomo_path}: {e}")
+            tqdm.write(f"Error reading {tomo_path}: {e}")
             continue
 
-        tqdm.write(f"\nTraitement de {run_id} (forme: {tomo_shape})")
+        tqdm.write(f"\nProcessing {run_id} (shape: {tomo_shape})")
 
-        # Collecter toutes les particules pour ce tomogramme
+        # Collect all particles for this tomogram
         all_particles = []
         for p_name in CZI_PARTICLE_CONFIG:
             json_path = picks_base_dir / run_id / "Picks" / f"{p_name}.json"
@@ -276,10 +276,10 @@ def main():
                 })
 
         if not all_particles:
-            tqdm.write(f"  Aucune particule trouvée pour {run_id}. Passage au suivant.")
+            tqdm.write(f"  No particles found for {run_id}. Skipping to the next.")
             continue
 
-        # Génération et sauvegarde des cartes
+        # Generation and saving of maps
         seg_map = generate_ground_truth(
             tomo_shape, all_particles, CZI_PARTICLE_CONFIG, VOXEL_SPACING, args.radius_fraction, single_pixel=args.single_pixel_mask
         )
@@ -287,20 +287,20 @@ def main():
         seg_map_file = seg_output_path / f"{run_id}.npy"
         np.save(seg_map_file, seg_map)
 
-        tqdm.write(f"  Cartes sauvegardées pour {run_id}.")
+        tqdm.write(f"  Maps saved for {run_id}.")
 
-        # Sauvegarde du plot si demandé
+        # Save plot if requested
         if args.save_plots:
             try:
-                # Charger les données du tomogramme pour la visualisation
+                # Load tomogram data for visualization
                 tomogram_data = zarr_obj['0'][:] if isinstance(zarr_obj, zarr.hierarchy.Group) else zarr_obj[:]
                 
-                # Choisir une coupe centrale
+                # Choose a central slice
                 z_slice_idx = tomo_shape[0] // 2
                 tomo_slice = tomogram_data[z_slice_idx, :, :]
                 seg_mask_slice = seg_map[z_slice_idx, :, :]
 
-                # Filtrer les particules pour la visualisation
+                # Filter particles for visualization
                 particles_on_slice = []
                 for p in all_particles:
                     config = CZI_PARTICLE_CONFIG.get(p['class_name'])
@@ -315,9 +315,9 @@ def main():
                     plot_output_path, CZI_PARTICLE_CONFIG, run_id, args.tomo_type,
                     z_slice_idx
                 )
-                tqdm.write(f"  Image de visualisation sauvegardée : {plot_output_path}")
+                tqdm.write(f"  Visualization image saved: {plot_output_path}")
             except Exception as e:
-                tqdm.write(f"Erreur lors de la génération de la visualisation pour {run_id}: {e}")
+                tqdm.write(f"Error generating visualization for {run_id}: {e}")
 
 
 if __name__ == "__main__":
