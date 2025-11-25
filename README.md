@@ -1,7 +1,7 @@
 
-# DeepFinder 2.1: U-Net Models for Cryo-ET Particle Detection
+# ETFinder: Anisotropic-Aware Test-Time Augmentation for Cryo-ET Particle Detection
 
-This repository contains the DeepFinder 2.1 codebase, an advanced framework for detecting and segmenting macromolecular particles in cryo-electron tomograms (cryo-ET). It leverages U-Net architectures with various enhancements, including K-Fold cross-validation, advanced data augmentation, and optimized post-processing strategies and mainly an anysotrtopic-aware Test Time augmentation.
+This repository contains the code for **ETFinder**, a novel approach for detecting macromolecular particles in cryo-electron tomograms (cryo-ET). ETFinder enhances a standard U-Net baseline by incorporating an **anisotropic-aware Test-Time Augmentation (TTA)** strategy, which significantly improves detection accuracy by accounting for the inherent anisotropy of cryo-ET data.
 
 The project is designed to facilitate research in cryo-ET, particularly within the context of challenges like the CZI Cryo-ET Object Identification Challenge.
 
@@ -26,7 +26,7 @@ The project is designed to facilitate research in cryo-ET, particularly within t
 
 ## 1. Getting Started
 
-To get started with DeepFinder 2.1, follow these general steps:
+To get started with ETFinder, follow these general steps:
 
 1.  **Set up your environment**: Install the required dependencies.
 2.  **Prepare your data**: Generate segmentation masks for training and convert annotations for evaluation.
@@ -39,8 +39,8 @@ To get started with DeepFinder 2.1, follow these general steps:
 First, clone the repository:
 
 ```bash
-git clone https://github.com/your_repo/deepfinder2.1.git
-cd deepfinder2.1
+git clone https://github.com/your_repo/etfinder.git
+cd etfinder
 ```
 
 It is recommended to use a virtual environment.
